@@ -169,6 +169,10 @@ class DCGAN():
             # If at save interval => save generated image samples
             if epoch % save_interval == 0:
                 self.save_imgs(epoch)
+            if epoch % 1000 == 0:
+                self.generator.save('generated_models/Generator_model_{}'.format(epoch))
+                self.discriminator.save('generated_models/Discriminator_model_{}'.format(epoch))
+                self.combined.save('generated_models/Combined_model_{}'.format(epoch))
 
     def save_imgs(self, epoch):
         pass
@@ -192,4 +196,4 @@ class DCGAN():
 
 if __name__ == '__main__':
     dcgan = DCGAN()
-    dcgan.train(epochs=2000, batch_size=32, save_interval=100)
+    dcgan.train(epochs=4000, batch_size=32, save_interval=100)
