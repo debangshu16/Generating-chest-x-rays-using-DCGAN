@@ -16,6 +16,7 @@ def find_last_model_checkpoint():
 generator = load_model('generated_models/Generator_model_{}'.format(find_last_model_checkpoint()))
 noise = np.random.normal(0,1,(1,100))
 generated_img = generator.predict(noise)
+generated_img = 0.5* generated_img + 0.5
 print (generated_img.shape)
 
 
