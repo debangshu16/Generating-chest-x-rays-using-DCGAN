@@ -4,6 +4,7 @@ import numpy as np
 import os
 import h5py
 import matplotlib.pyplot as plt
+from glob import glob
 
 #reading our mini_dataset
 from keras.utils.io_utils import HDF5Matrix
@@ -124,7 +125,7 @@ class DCGAN():
 
         return Model(img, validity)
 
-    def train(self, epochs, batch_size=128, save_interval=50):
+    def train(self, epochs, batch_size=128, save_interval=50,last_model_point=0):
 
         # Load the dataset
         X_train = img_ds
@@ -168,13 +169,13 @@ class DCGAN():
 
             # If at save interval => save generated image samples
             if epoch % save_interval == 0:
-                self.save_imgs(epoch)
-            if epoch % 1000 == 0:
-                self.generator.save('generated_models/Generator_model_{}'.format(epoch))
-                self.discriminator.save('generated_models/Discriminator_model_{}'.format(epoch))
-                self.combined.save('generated_models/Combined_model_{}'.format(epoch))
+                self.save_imgs(epoch,last_model_point)
 
-    def save_imgs(self, epoch):
+        self.generator.save('generated_models/Generator_model_{}'.format(epoch+last_model_point+1))
+        self.discriminator.save('generated_models/Discriminator_model_{}'.format(epoch+last_model_point+1))
+
+
+    def save_imgs(self, epoch,last_model_point):
         pass
         r, c = 5, 5
         noise = np.random.normal(0, 1, (r * c, self.latent_dim))
@@ -190,10 +191,26 @@ class DCGAN():
                 axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='bone')
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("generated_images/chest_xray_%d.png" % epoch)
+        fig.savefig("generated_images/chest_xray_%d.png" % (epoch+last_model_point))
         plt.close()
 
+from keras.models import load_model
+
+def find_last_model_checkpoint():
+    last_model_point=0
+    for f in (glob('generated_models/Generator_model_*')):
+        file = f.split('/')[-1]
+        checkpoint_no = file.split('_')[-1]
+        if checkpoint_no > last_model_point:
+            last_model_point = checkpoint_no
+
+    return int(last_model_point)
 
 if __name__ == '__main__':
     dcgan = DCGAN()
-    dcgan.train(epochs=4000, batch_size=32, save_interval=100)
+    last_model_point=find_last_model_checkpoint()
+
+    if os.path.exists('generated_models/Generator_model_{}'.format(last_model_point)):
+        dcgan.generator = load_model('generated_models/Generator_model_{}'.format(last_model_point))
+        dcgan.discriminator = load_model('generated_models/Discriminator_model_{}'.format(last_model_point))
+    dcgan.train(epochs=10000, batch_size=32, save_interval=200,last_model_point=last_model_point)
