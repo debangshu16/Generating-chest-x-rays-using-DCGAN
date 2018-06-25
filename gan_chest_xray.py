@@ -8,20 +8,22 @@ from glob import glob
 
 #reading our mini_dataset
 from keras.utils.io_utils import HDF5Matrix
-disease_vec_labels = ['Atelectasis','Cardiomegaly','Consolidation','Edema','Effusion','Emphysema','Fibrosis',
+
+'''disease_vec_labels = ['Atelectasis','Cardiomegaly','Consolidation','Edema','Effusion','Emphysema','Fibrosis',
  'Hernia','Infiltration','Mass','Nodule','Pleural_Thickening','Pneumonia','Pneumothorax']
 disease_vec=[]
 with h5py.File('chest_xray.h5','r') as h5_data:
     all_fields = list(h5_data.keys())
-    '''for c_key in all_fields:
-        print (c_key,h5_data[c_key].shape,h5_data[c_key].dtype)'''
+
     for c_key in disease_vec_labels:
         disease_vec += [h5_data[c_key][:]]
 
     disease_vec = np.stack(disease_vec,1)
-    #print ('Disease Vec:',disease_vec.shape)
+'''    #print ('Disease Vec:',disease_vec.shape)
 
-h5_path = 'chest_xray.h5'
+disease = 'Atelectasis'
+h5_path = '{}_mini.h5'.format(disease)
+
 img_ds = HDF5Matrix(h5_path,'images',normalizer = lambda x:x/127.5-1)
 #print (img_ds[:1].shape)
 
@@ -145,8 +147,9 @@ class DCGAN():
             # ---------------------
 
             # Select a random half of images
-            idx = np.random.randint(0, X_train.shape[0]- batch_size)
-            imgs = X_train[idx:idx+batch_size]
+
+            idx = np.random.randint(0, X_train.shape[0], batch_size)
+            imgs = np.array([X_train[i] for i in idx])
 
             # Sample noise and generate a batch of new images
             noise = np.random.normal(0, 1, (batch_size, self.latent_dim))
@@ -171,8 +174,8 @@ class DCGAN():
             if epoch % save_interval == 0:
                 self.save_imgs(epoch,last_model_point)
 
-        self.generator.save('generated_models/Generator_model_{}'.format(epoch+last_model_point+1))
-        self.discriminator.save('generated_models/Discriminator_model_{}'.format(epoch+last_model_point+1))
+        self.generator.save('generated_models/Generator_model_{}_{}'.format(disease,epoch+last_model_point+1))
+        self.discriminator.save('generated_models/Discriminator_model_{}_{}'.format(disease,epoch+last_model_point+1))
 
 
     def save_imgs(self, epoch,last_model_point):
@@ -191,16 +194,16 @@ class DCGAN():
                 axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='bone')
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("generated_images/chest_xray_%d.png" % (epoch+last_model_point))
+        fig.savefig("generated_images/{}_{}.png".format(disease,epoch+last_model_point))
         plt.close()
 
 from keras.models import load_model
 
 def find_last_model_checkpoint():
     last_model_point=0
-    for f in (glob('generated_models/Generator_model_*')):
+    for f in (glob('generated_models/Generator_model_{}_*'.format(disease))):
         file = f.split('/')[-1]
-        checkpoint_no = file.split('_')[-1]
+        checkpoint_no = int(file.split('_')[-1])
         if checkpoint_no > last_model_point:
             last_model_point = checkpoint_no
 
@@ -209,8 +212,23 @@ def find_last_model_checkpoint():
 if __name__ == '__main__':
     dcgan = DCGAN()
     last_model_point=find_last_model_checkpoint()
+    print ("Last checkpoint number = %d" %last_model_point)
 
-    if os.path.exists('generated_models/Generator_model_{}'.format(last_model_point)):
-        dcgan.generator = load_model('generated_models/Generator_model_{}'.format(last_model_point))
-        dcgan.discriminator = load_model('generated_models/Discriminator_model_{}'.format(last_model_point))
-    dcgan.train(epochs=10000, batch_size=32, save_interval=200,last_model_point=last_model_point)
+    if os.path.exists('generated_models/Generator_model_{}_{}'.format(disease,last_model_point)):
+        dcgan.generator = load_model('generated_models/Generator_model_{}_{}'.format(disease,last_model_point))
+        dcgan.discriminator = load_model('generated_models/Discriminator_model_{}_{}'.format(disease,last_model_point))
+        optimizer = Adam(0.0002, 0.5)
+        z = Input(shape=(100,))
+        img = dcgan.generator(z)
+
+        # For the combined model we will only train the generator
+        dcgan.discriminator.trainable = False
+
+        # The discriminator takes generated images as input and determines validity
+        valid = dcgan.discriminator(img)
+
+        # The combined model  (stacked generator and discriminator)
+        # Trains the generator to fool the discriminator
+        dcgan.combined = Model(z, valid)
+        dcgan.combined.compile(loss='binary_crossentropy', optimizer=optimizer)
+    dcgan.train(epochs=2000, batch_size=32, save_interval=100,last_model_point=last_model_point)
